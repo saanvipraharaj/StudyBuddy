@@ -1,6 +1,5 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
 
 const {
     uploadMaterial,
@@ -15,31 +14,12 @@ const authMiddleware =
 
 const router = express.Router();
 
-
 // ============================================
-// MULTER STORAGE
+// MULTER MEMORY STORAGE
+// Vercel-safe: no permanent local uploads folder
 // ============================================
 
-const storage = multer.diskStorage({
-
-    destination: (req, file, cb) => {
-        cb(null, "uploads/");
-    },
-
-    filename: (req, file, cb) => {
-
-        const uniqueName =
-            `${Date.now()}-${Math.round(
-                Math.random() * 1E9
-            )}${path.extname(file.originalname)}`;
-
-        cb(
-            null,
-            uniqueName
-        );
-    }
-});
-
+const storage = multer.memoryStorage();
 
 // ============================================
 // PDF FILE FILTER
@@ -50,19 +30,12 @@ const fileFilter = (
     file,
     cb
 ) => {
-
     if (
         file.mimetype ===
         "application/pdf"
     ) {
-
-        cb(
-            null,
-            true
-        );
-
+        cb(null, true);
     } else {
-
         cb(
             new Error(
                 "Only PDF files are allowed"
@@ -72,13 +45,11 @@ const fileFilter = (
     }
 };
 
-
 // ============================================
 // MULTER CONFIG
 // ============================================
 
 const upload = multer({
-
     storage,
 
     fileFilter,
@@ -87,9 +58,7 @@ const upload = multer({
         fileSize:
             15 * 1024 * 1024
     }
-
 });
-
 
 // ============================================
 // AUTHENTICATION
@@ -98,7 +67,6 @@ const upload = multer({
 router.use(
     authMiddleware
 );
-
 
 // ============================================
 // UPLOAD PDF
@@ -110,7 +78,6 @@ router.post(
     uploadMaterial
 );
 
-
 // ============================================
 // GET COMBINED CHAPTER TEXT
 // ============================================
@@ -119,7 +86,6 @@ router.get(
     "/chapter/:chapterId/combined-text",
     getCombinedChapterText
 );
-
 
 // ============================================
 // GET ALL MATERIALS FOR CHAPTER
@@ -130,7 +96,6 @@ router.get(
     getMaterialsByChapter
 );
 
-
 // ============================================
 // GET SINGLE MATERIAL
 // ============================================
@@ -140,7 +105,6 @@ router.get(
     getMaterialById
 );
 
-
 // ============================================
 // DELETE MATERIAL
 // ============================================
@@ -149,6 +113,5 @@ router.delete(
     "/:id",
     deleteMaterial
 );
-
 
 module.exports = router;
