@@ -15,6 +15,7 @@ const {
 // ============================================
 
 const createToken = (user) => {
+
     return jwt.sign(
         {
             userId: user.id,
@@ -33,6 +34,7 @@ const createToken = (user) => {
 // ============================================
 
 const registerUser = async (req, res) => {
+
     try {
 
         const {
@@ -50,33 +52,48 @@ const registerUser = async (req, res) => {
         // ----------------------------------------
 
         if (!name || !email || !password) {
-            return res.status(400).json({
-                status: "error",
-                message: "Name, email and password are required"
-            });
+
+            return res
+                .status(400)
+                .json({
+                    status: "error",
+                    message:
+                        "Name, email and password are required"
+                });
         }
 
+
         if (password.length < 8) {
-            return res.status(400).json({
-                status: "error",
-                message: "Password must be at least 8 characters"
-            });
+
+            return res
+                .status(400)
+                .json({
+                    status: "error",
+                    message:
+                        "Password must be at least 8 characters"
+                });
         }
+
 
         const normalizedEmail =
             email
                 .trim()
                 .toLowerCase();
 
+
         const trimmedName =
             name.trim();
 
 
         if (!trimmedName) {
-            return res.status(400).json({
-                status: "error",
-                message: "Name is required"
-            });
+
+            return res
+                .status(400)
+                .json({
+                    status: "error",
+                    message:
+                        "Name is required"
+                });
         }
 
 
@@ -119,7 +136,8 @@ const registerUser = async (req, res) => {
                 return res
                     .status(409)
                     .json({
-                        status: "error",
+                        status:
+                            "error",
 
                         message:
                             "An account with this email already exists. Please continue with Google."
@@ -154,8 +172,13 @@ const registerUser = async (req, res) => {
                 );
 
 
+                const frontendUrl =
+                    process.env.FRONTEND_URL ||
+                    "http://localhost:5173";
+
+
                 const verificationUrl =
-                    `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+                    `${frontendUrl}/verify-email/${verificationToken}`;
 
 
                 try {
@@ -297,8 +320,13 @@ const registerUser = async (req, res) => {
         // CREATE VERIFICATION URL
         // ----------------------------------------
 
+        const frontendUrl =
+            process.env.FRONTEND_URL ||
+            "http://localhost:5173";
+
+
         const verificationUrl =
-            `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+            `${frontendUrl}/verify-email/${verificationToken}`;
 
 
         // ----------------------------------------
@@ -397,10 +425,6 @@ const verifyEmail =
                 req.params;
 
 
-            // ----------------------------------------
-            // VALIDATE TOKEN
-            // ----------------------------------------
-
             if (!token) {
 
                 return res
@@ -414,10 +438,6 @@ const verifyEmail =
                     });
             }
 
-
-            // ----------------------------------------
-            // FIND USER
-            // ----------------------------------------
 
             const result =
                 await pool.query(
@@ -453,10 +473,6 @@ const verifyEmail =
                 result.rows[0];
 
 
-            // ----------------------------------------
-            // ALREADY VERIFIED
-            // ----------------------------------------
-
             if (
                 user.email_verified
             ) {
@@ -472,10 +488,6 @@ const verifyEmail =
                     });
             }
 
-
-            // ----------------------------------------
-            // VERIFY EMAIL
-            // ----------------------------------------
 
             await pool.query(
                 `UPDATE users
@@ -564,10 +576,6 @@ const loginUser =
                     .toLowerCase();
 
 
-            // ----------------------------------------
-            // FIND USER
-            // ----------------------------------------
-
             const result =
                 await pool.query(
                     `SELECT *
@@ -600,10 +608,6 @@ const loginUser =
                 result.rows[0];
 
 
-            // ----------------------------------------
-            // CHECK ACCOUNT STATUS
-            // ----------------------------------------
-
             if (
                 user.account_status !==
                 "active"
@@ -620,10 +624,6 @@ const loginUser =
                     });
             }
 
-
-            // ----------------------------------------
-            // GOOGLE ACCOUNT
-            // ----------------------------------------
 
             if (
                 user.auth_provider ===
@@ -643,10 +643,6 @@ const loginUser =
             }
 
 
-            // ----------------------------------------
-            // CHECK EMAIL VERIFICATION
-            // ----------------------------------------
-
             if (
                 user.auth_provider ===
                 "local" &&
@@ -664,10 +660,6 @@ const loginUser =
                     });
             }
 
-
-            // ----------------------------------------
-            // CHECK PASSWORD
-            // ----------------------------------------
 
             if (
                 !user.password_hash
@@ -708,29 +700,17 @@ const loginUser =
             }
 
 
-            // ----------------------------------------
-            // CREATE JWT
-            // ----------------------------------------
-
             const token =
                 createToken(
                     user
                 );
 
 
-            // ----------------------------------------
-            // REMOVE SENSITIVE DATA
-            // ----------------------------------------
-
             delete user.password_hash;
             delete user.reset_token;
             delete user.reset_token_expires;
             delete user.verification_token;
 
-
-            // ----------------------------------------
-            // LOGIN SUCCESS
-            // ----------------------------------------
 
             return res
                 .status(200)
@@ -903,10 +883,6 @@ const forgotPassword =
                 );
 
 
-            // ----------------------------------------
-            // ACCOUNT DOES NOT EXIST
-            // ----------------------------------------
-
             if (
                 result.rows.length ===
                 0
@@ -928,10 +904,6 @@ const forgotPassword =
                 result.rows[0];
 
 
-            // ----------------------------------------
-            // GOOGLE ACCOUNT
-            // ----------------------------------------
-
             if (
                 user.auth_provider ===
                 "google"
@@ -949,10 +921,6 @@ const forgotPassword =
             }
 
 
-            // ----------------------------------------
-            // CREATE RESET TOKEN
-            // ----------------------------------------
-
             const resetToken =
                 crypto
                     .randomBytes(32)
@@ -967,10 +935,6 @@ const forgotPassword =
                     1000
                 );
 
-
-            // ----------------------------------------
-            // SAVE RESET TOKEN
-            // ----------------------------------------
 
             await pool.query(
                 `UPDATE users
@@ -987,17 +951,14 @@ const forgotPassword =
             );
 
 
-            // ----------------------------------------
-            // CREATE RESET URL
-            // ----------------------------------------
+            const frontendUrl =
+                process.env.FRONTEND_URL ||
+                "http://localhost:5173";
+
 
             const resetUrl =
-                `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+                `${frontendUrl}/reset-password/${resetToken}`;
 
-
-            // ----------------------------------------
-            // SEND RESET EMAIL
-            // ----------------------------------------
 
             try {
 
@@ -1245,10 +1206,19 @@ const googleLoginSuccess =
                 req.user;
 
 
+            // ----------------------------------------
+            // USER NOT FOUND
+            // ----------------------------------------
+
             if (!user) {
 
+                const frontendUrl =
+                    process.env.FRONTEND_URL ||
+                    "http://localhost:5173";
+
+
                 return res.redirect(
-                    `${process.env.FRONTEND_URL || "http://localhost:5173"}/login?google_error=authentication_failed`
+                    `${frontendUrl}/?google_error=authentication_failed`
                 );
             }
 
@@ -1263,14 +1233,19 @@ const googleLoginSuccess =
                 "active"
             ) {
 
+                const frontendUrl =
+                    process.env.FRONTEND_URL ||
+                    "http://localhost:5173";
+
+
                 return res.redirect(
-                    `${process.env.FRONTEND_URL || "http://localhost:5173"}/login?google_error=account_inactive`
+                    `${frontendUrl}/?google_error=account_inactive`
                 );
             }
 
 
             // ----------------------------------------
-            // CREATE STUDYBUDDY JWT
+            // CREATE JWT
             // ----------------------------------------
 
             const token =
@@ -1292,11 +1267,24 @@ const googleLoginSuccess =
 
 
             // ----------------------------------------
-            // REDIRECT TO FRONTEND
+            // FRONTEND URL
+            // ----------------------------------------
+
+            const frontendUrl =
+                process.env.FRONTEND_URL ||
+                "http://localhost:5173";
+
+
+            // ----------------------------------------
+            // QUERY PARAMETERS
             // ----------------------------------------
 
             const params =
                 new URLSearchParams({
+
+                    google_auth:
+                        "success",
+
                     token,
 
                     id:
@@ -1319,11 +1307,16 @@ const googleLoginSuccess =
                 });
 
 
+            // ----------------------------------------
+            // REDIRECT THROUGH ROOT "/"
+            //
+            // Important for Vercel:
+            // root URL exists directly, so React
+            // handles the Google auth result.
+            // ----------------------------------------
+
             return res.redirect(
-                `${
-                    process.env.FRONTEND_URL ||
-                    "http://localhost:5173"
-                }/google-auth-success?${params.toString()}`
+                `${frontendUrl}/?${params.toString()}`
             );
 
 
@@ -1335,11 +1328,13 @@ const googleLoginSuccess =
             );
 
 
+            const frontendUrl =
+                process.env.FRONTEND_URL ||
+                "http://localhost:5173";
+
+
             return res.redirect(
-                `${
-                    process.env.FRONTEND_URL ||
-                    "http://localhost:5173"
-                }/login?google_error=server_error`
+                `${frontendUrl}/?google_error=server_error`
             );
         }
     };

@@ -1,7 +1,8 @@
 import {
     BrowserRouter,
     Routes,
-    Route
+    Route,
+    useSearchParams
 } from "react-router-dom";
 
 import Register from "./pages/register";
@@ -32,6 +33,53 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import InteractiveWaveBackground from "./components/InteractiveWaveBackground";
 
 
+// ============================================
+// ROOT ROUTE
+// ============================================
+
+function RootRoute() {
+
+    const [searchParams] =
+        useSearchParams();
+
+
+    const googleAuth =
+        searchParams.get(
+            "google_auth"
+        );
+
+
+    const token =
+        searchParams.get(
+            "token"
+        );
+
+
+    // ========================================
+    // GOOGLE OAUTH CALLBACK
+    // ========================================
+
+    if (
+        googleAuth === "success" &&
+        token
+    ) {
+
+        return (
+            <GoogleAuthSuccess />
+        );
+    }
+
+
+    // ========================================
+    // NORMAL HOME PAGE
+    // ========================================
+
+    return (
+        <Login />
+    );
+}
+
+
 function App() {
 
     return (
@@ -56,16 +104,20 @@ function App() {
 
 
                     {/* ================================= */}
-                    {/* PUBLIC ROUTES */}
+                    {/* ROOT */}
                     {/* ================================= */}
 
                     <Route
                         path="/"
                         element={
-                            <Login />
+                            <RootRoute />
                         }
                     />
 
+
+                    {/* ================================= */}
+                    {/* PUBLIC ROUTES */}
+                    {/* ================================= */}
 
                     <Route
                         path="/login"
@@ -108,7 +160,8 @@ function App() {
 
 
                     {/* ================================= */}
-                    {/* GOOGLE AUTH SUCCESS */}
+                    {/* OLD GOOGLE AUTH ROUTE */}
+                    {/* KEEP FOR LOCAL COMPATIBILITY */}
                     {/* ================================= */}
 
                     <Route
