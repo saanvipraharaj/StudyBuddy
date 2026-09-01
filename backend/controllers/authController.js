@@ -5,7 +5,6 @@ const crypto = require("crypto");
 const pool = require("../config/db");
 
 const {
-    sendVerificationEmail,
     sendPasswordResetEmail
 } = require("../services/emailService");
 
@@ -47,11 +46,15 @@ const registerUser = async (req, res) => {
         } = req.body;
 
 
-        // ----------------------------------------
+        // ========================================
         // VALIDATION
-        // ----------------------------------------
+        // ========================================
 
-        if (!name || !email || !password) {
+        if (
+            !name ||
+            !email ||
+            !password
+        ) {
 
             return res
                 .status(400)
@@ -63,7 +66,9 @@ const registerUser = async (req, res) => {
         }
 
 
-        if (password.length < 8) {
+        if (
+            password.length < 8
+        ) {
 
             return res
                 .status(400)
@@ -97,16 +102,15 @@ const registerUser = async (req, res) => {
         }
 
 
-        // ----------------------------------------
+        // ========================================
         // CHECK EXISTING USER
-        // ----------------------------------------
+        // ========================================
 
         const existingUser =
             await pool.query(
                 `SELECT
                     id,
-                    auth_provider,
-                    email_verified
+                    auth_provider
                  FROM users
                  WHERE email = $1`,
                 [
@@ -124,9 +128,9 @@ const registerUser = async (req, res) => {
                 existingUser.rows[0];
 
 
-            // ----------------------------------------
-            // GOOGLE ACCOUNT
-            // ----------------------------------------
+            // ====================================
+            // EXISTING GOOGLE ACCOUNT
+            // ====================================
 
             if (
                 existing.auth_provider ===
@@ -136,8 +140,7 @@ const registerUser = async (req, res) => {
                 return res
                     .status(409)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "An account with this email already exists. Please continue with Google."
@@ -145,90 +148,14 @@ const registerUser = async (req, res) => {
             }
 
 
-            // ----------------------------------------
-            // LOCAL ACCOUNT - NOT VERIFIED
-            // ----------------------------------------
-
-            if (
-                !existing.email_verified
-            ) {
-
-                const verificationToken =
-                    crypto
-                        .randomBytes(32)
-                        .toString("hex");
-
-
-                await pool.query(
-                    `UPDATE users
-                     SET
-                        verification_token = $1,
-                        updated_at = NOW()
-                     WHERE id = $2`,
-                    [
-                        verificationToken,
-                        existing.id
-                    ]
-                );
-
-
-                const frontendUrl =
-                    process.env.FRONTEND_URL ||
-                    "http://localhost:5173";
-
-
-                const verificationUrl =
-                    `${frontendUrl}/verify-email/${verificationToken}`;
-
-
-                try {
-
-                    await sendVerificationEmail(
-                        normalizedEmail,
-                        verificationUrl
-                    );
-
-                } catch (emailError) {
-
-                    console.error(
-                        "Verification email error:",
-                        emailError
-                    );
-
-
-                    return res
-                        .status(500)
-                        .json({
-                            status:
-                                "error",
-
-                            message:
-                                "Unable to send verification email. Please try again."
-                        });
-                }
-
-
-                return res
-                    .status(200)
-                    .json({
-                        status:
-                            "success",
-
-                        message:
-                            "A new verification email has been sent."
-                    });
-            }
-
-
-            // ----------------------------------------
-            // LOCAL ACCOUNT - ALREADY VERIFIED
-            // ----------------------------------------
+            // ====================================
+            // EXISTING EMAIL ACCOUNT
+            // ====================================
 
             return res
                 .status(409)
                 .json({
-                    status:
-                        "error",
+                    status: "error",
 
                     message:
                         "An account with this email already exists. Please log in."
@@ -236,9 +163,9 @@ const registerUser = async (req, res) => {
         }
 
 
-        // ----------------------------------------
+        // ========================================
         // HASH PASSWORD
-        // ----------------------------------------
+        // ========================================
 
         const passwordHash =
             await bcrypt.hash(
@@ -247,19 +174,12 @@ const registerUser = async (req, res) => {
             );
 
 
-        // ----------------------------------------
-        // EMAIL VERIFICATION TOKEN
-        // ----------------------------------------
-
-        const verificationToken =
-            crypto
-                .randomBytes(32)
-                .toString("hex");
-
-
-        // ----------------------------------------
+        // ========================================
         // CREATE USER
-        // ----------------------------------------
+        //
+        // Email verification is disabled.
+        // Local users are immediately active.
+        // ========================================
 
         const result =
             await pool.query(
@@ -285,8 +205,8 @@ const registerUser = async (req, res) => {
                     $5,
                     $6,
                     'local',
-                    FALSE,
-                    $7,
+                    TRUE,
+                    NULL,
                     'active'
                 )
                 RETURNING
@@ -306,8 +226,7 @@ const registerUser = async (req, res) => {
                     passwordHash,
                     course || null,
                     college || null,
-                    study_hours_per_day || null,
-                    verificationToken
+                    study_hours_per_day || null
                 ]
             );
 
@@ -316,71 +235,17 @@ const registerUser = async (req, res) => {
             result.rows[0];
 
 
-        // ----------------------------------------
-        // CREATE VERIFICATION URL
-        // ----------------------------------------
-
-        const frontendUrl =
-            process.env.FRONTEND_URL ||
-            "http://localhost:5173";
-
-
-        const verificationUrl =
-            `${frontendUrl}/verify-email/${verificationToken}`;
-
-
-        // ----------------------------------------
-        // SEND VERIFICATION EMAIL
-        // ----------------------------------------
-
-        try {
-
-            await sendVerificationEmail(
-                user.email,
-                verificationUrl
-            );
-
-        } catch (emailError) {
-
-            console.error(
-                "Verification email error:",
-                emailError
-            );
-
-
-            await pool.query(
-                `DELETE FROM users
-                 WHERE id = $1`,
-                [
-                    user.id
-                ]
-            );
-
-
-            return res
-                .status(500)
-                .json({
-                    status:
-                        "error",
-
-                    message:
-                        "Unable to send verification email. Please try again."
-                });
-        }
-
-
-        // ----------------------------------------
+        // ========================================
         // ACCOUNT CREATED
-        // ----------------------------------------
+        // ========================================
 
         return res
             .status(201)
             .json({
-                status:
-                    "success",
+                status: "success",
 
                 message:
-                    "Account created successfully. Please check your email to verify your account.",
+                    "Account created successfully. You can now log in.",
 
                 user
             });
@@ -397,9 +262,7 @@ const registerUser = async (req, res) => {
         return res
             .status(500)
             .json({
-                status:
-                    "error",
-
+                status: "error",
                 message:
                     "Unable to create account"
             });
@@ -409,6 +272,10 @@ const registerUser = async (req, res) => {
 
 // ============================================
 // VERIFY EMAIL
+//
+// Email verification is currently disabled.
+// This function remains exported so the
+// existing route does not break.
 // ============================================
 
 const verifyEmail =
@@ -417,120 +284,14 @@ const verifyEmail =
         res
     ) => {
 
-        try {
+        return res
+            .status(200)
+            .json({
+                status: "success",
 
-            const {
-                token
-            } =
-                req.params;
-
-
-            if (!token) {
-
-                return res
-                    .status(400)
-                    .json({
-                        status:
-                            "error",
-
-                        message:
-                            "Verification token is required."
-                    });
-            }
-
-
-            const result =
-                await pool.query(
-                    `SELECT
-                        id,
-                        email_verified
-                     FROM users
-                     WHERE verification_token = $1`,
-                    [
-                        token
-                    ]
-                );
-
-
-            if (
-                result.rows.length ===
-                0
-            ) {
-
-                return res
-                    .status(400)
-                    .json({
-                        status:
-                            "error",
-
-                        message:
-                            "Invalid or expired verification link."
-                    });
-            }
-
-
-            const user =
-                result.rows[0];
-
-
-            if (
-                user.email_verified
-            ) {
-
-                return res
-                    .status(200)
-                    .json({
-                        status:
-                            "success",
-
-                        message:
-                            "Your email is already verified."
-                    });
-            }
-
-
-            await pool.query(
-                `UPDATE users
-                 SET
-                    email_verified = TRUE,
-                    verification_token = NULL,
-                    updated_at = NOW()
-                 WHERE id = $1`,
-                [
-                    user.id
-                ]
-            );
-
-
-            return res
-                .status(200)
-                .json({
-                    status:
-                        "success",
-
-                    message:
-                        "Email verified successfully. You can now log in."
-                });
-
-
-        } catch (error) {
-
-            console.error(
-                "Email verification error:",
-                error
-            );
-
-
-            return res
-                .status(500)
-                .json({
-                    status:
-                        "error",
-
-                    message:
-                        "Unable to verify your email."
-                });
-        }
+                message:
+                    "Email verification is not required."
+            });
     };
 
 
@@ -553,6 +314,10 @@ const loginUser =
                 req.body;
 
 
+            // ====================================
+            // VALIDATION
+            // ====================================
+
             if (
                 !email ||
                 !password
@@ -561,8 +326,7 @@ const loginUser =
                 return res
                     .status(400)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "Email and password are required"
@@ -575,6 +339,10 @@ const loginUser =
                     .trim()
                     .toLowerCase();
 
+
+            // ====================================
+            // FIND USER
+            // ====================================
 
             const result =
                 await pool.query(
@@ -595,8 +363,7 @@ const loginUser =
                 return res
                     .status(401)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "Invalid email or password"
@@ -608,6 +375,10 @@ const loginUser =
                 result.rows[0];
 
 
+            // ====================================
+            // ACCOUNT STATUS
+            // ====================================
+
             if (
                 user.account_status !==
                 "active"
@@ -616,14 +387,17 @@ const loginUser =
                 return res
                     .status(403)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "This account is not active"
                     });
             }
 
+
+            // ====================================
+            // GOOGLE-ONLY ACCOUNT
+            // ====================================
 
             if (
                 user.auth_provider ===
@@ -634,8 +408,7 @@ const loginUser =
                 return res
                     .status(400)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "This account uses Google login. Please continue with Google."
@@ -643,23 +416,9 @@ const loginUser =
             }
 
 
-            if (
-                user.auth_provider ===
-                "local" &&
-                !user.email_verified
-            ) {
-
-                return res
-                    .status(403)
-                    .json({
-                        status:
-                            "error",
-
-                        message:
-                            "Please verify your email before logging in."
-                    });
-            }
-
+            // ====================================
+            // PASSWORD MUST EXIST
+            // ====================================
 
             if (
                 !user.password_hash
@@ -668,14 +427,17 @@ const loginUser =
                 return res
                     .status(400)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "This account does not have a password. Please use Google login."
                     });
             }
 
+
+            // ====================================
+            // CHECK PASSWORD
+            // ====================================
 
             const passwordMatch =
                 await bcrypt.compare(
@@ -691,8 +453,7 @@ const loginUser =
                 return res
                     .status(401)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "Invalid email or password"
@@ -700,11 +461,19 @@ const loginUser =
             }
 
 
+            // ====================================
+            // CREATE JWT
+            // ====================================
+
             const token =
                 createToken(
                     user
                 );
 
+
+            // ====================================
+            // REMOVE PRIVATE FIELDS
+            // ====================================
 
             delete user.password_hash;
             delete user.reset_token;
@@ -712,11 +481,14 @@ const loginUser =
             delete user.verification_token;
 
 
+            // ====================================
+            // SUCCESS
+            // ====================================
+
             return res
                 .status(200)
                 .json({
-                    status:
-                        "success",
+                    status: "success",
 
                     message:
                         "Login successful",
@@ -738,8 +510,7 @@ const loginUser =
             return res
                 .status(500)
                 .json({
-                    status:
-                        "error",
+                    status: "error",
 
                     message:
                         "Unable to login"
@@ -790,8 +561,7 @@ const getCurrentUser =
                 return res
                     .status(404)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "User not found"
@@ -802,8 +572,7 @@ const getCurrentUser =
             return res
                 .status(200)
                 .json({
-                    status:
-                        "success",
+                    status: "success",
 
                     user:
                         result.rows[0]
@@ -821,8 +590,7 @@ const getCurrentUser =
             return res
                 .status(500)
                 .json({
-                    status:
-                        "error",
+                    status: "error",
 
                     message:
                         "Unable to retrieve user"
@@ -854,8 +622,7 @@ const forgotPassword =
                 return res
                     .status(400)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "Email is required"
@@ -883,6 +650,10 @@ const forgotPassword =
                 );
 
 
+            // ====================================
+            // DON'T REVEAL WHETHER ACCOUNT EXISTS
+            // ====================================
+
             if (
                 result.rows.length ===
                 0
@@ -891,11 +662,10 @@ const forgotPassword =
                 return res
                     .status(200)
                     .json({
-                        status:
-                            "success",
+                        status: "success",
 
                         message:
-                            "A password reset link has been sent to your email."
+                            "If an account exists for this email, password reset instructions will be sent."
                     });
             }
 
@@ -903,6 +673,10 @@ const forgotPassword =
             const user =
                 result.rows[0];
 
+
+            // ====================================
+            // GOOGLE ACCOUNT
+            // ====================================
 
             if (
                 user.auth_provider ===
@@ -912,14 +686,17 @@ const forgotPassword =
                 return res
                     .status(200)
                     .json({
-                        status:
-                            "success",
+                        status: "success",
 
                         message:
-                            "If this account supports password login, a reset link has been sent."
+                            "If this account supports password login, password reset instructions will be sent."
                     });
             }
 
+
+            // ====================================
+            // CREATE RESET TOKEN
+            // ====================================
 
             const resetToken =
                 crypto
@@ -951,6 +728,10 @@ const forgotPassword =
             );
 
 
+            // ====================================
+            // CREATE RESET URL
+            // ====================================
+
             const frontendUrl =
                 process.env.FRONTEND_URL ||
                 "http://localhost:5173";
@@ -959,6 +740,15 @@ const forgotPassword =
             const resetUrl =
                 `${frontendUrl}/reset-password/${resetToken}`;
 
+
+            // ====================================
+            // SEND RESET EMAIL
+            //
+            // NOTE:
+            // This still requires a working
+            // email provider / verified Resend
+            // domain for users other than you.
+            // ====================================
 
             try {
 
@@ -991,11 +781,10 @@ const forgotPassword =
                 return res
                     .status(500)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
-                            "Unable to send password reset email. Please try again."
+                            "Password reset email is currently unavailable. Please try again later."
                     });
             }
 
@@ -1003,11 +792,10 @@ const forgotPassword =
             return res
                 .status(200)
                 .json({
-                    status:
-                        "success",
+                    status: "success",
 
                     message:
-                        "A password reset link has been sent to your email."
+                        "Password reset instructions have been sent to your email."
                 });
 
 
@@ -1022,8 +810,7 @@ const forgotPassword =
             return res
                 .status(500)
                 .json({
-                    status:
-                        "error",
+                    status: "error",
 
                     message:
                         "Unable to process password reset"
@@ -1059,8 +846,7 @@ const resetPassword =
                 return res
                     .status(400)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "Reset token and new password are required"
@@ -1076,8 +862,7 @@ const resetPassword =
                 return res
                     .status(400)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "Password must be at least 8 characters"
@@ -1105,8 +890,7 @@ const resetPassword =
                 return res
                     .status(400)
                     .json({
-                        status:
-                            "error",
+                        status: "error",
 
                         message:
                             "Invalid or expired reset token"
@@ -1139,8 +923,7 @@ const resetPassword =
             return res
                 .status(200)
                 .json({
-                    status:
-                        "success",
+                    status: "success",
 
                     message:
                         "Password reset successfully. You can now log in."
@@ -1158,8 +941,7 @@ const resetPassword =
             return res
                 .status(500)
                 .json({
-                    status:
-                        "error",
+                    status: "error",
 
                     message:
                         "Unable to reset password"
@@ -1181,8 +963,7 @@ const logoutUser =
         return res
             .status(200)
             .json({
-                status:
-                    "success",
+                status: "success",
 
                 message:
                     "Logged out successfully"
@@ -1206,9 +987,9 @@ const googleLoginSuccess =
                 req.user;
 
 
-            // ----------------------------------------
+            // ====================================
             // USER NOT FOUND
-            // ----------------------------------------
+            // ====================================
 
             if (!user) {
 
@@ -1223,9 +1004,9 @@ const googleLoginSuccess =
             }
 
 
-            // ----------------------------------------
-            // CHECK ACCOUNT STATUS
-            // ----------------------------------------
+            // ====================================
+            // ACCOUNT STATUS
+            // ====================================
 
             if (
                 user.account_status &&
@@ -1244,9 +1025,9 @@ const googleLoginSuccess =
             }
 
 
-            // ----------------------------------------
+            // ====================================
             // CREATE JWT
-            // ----------------------------------------
+            // ====================================
 
             const token =
                 createToken(
@@ -1254,9 +1035,9 @@ const googleLoginSuccess =
                 );
 
 
-            // ----------------------------------------
+            // ====================================
             // DETERMINE SETUP STATUS
-            // ----------------------------------------
+            // ====================================
 
             const setupCompleted =
                 Boolean(
@@ -1266,18 +1047,18 @@ const googleLoginSuccess =
                 );
 
 
-            // ----------------------------------------
+            // ====================================
             // FRONTEND URL
-            // ----------------------------------------
+            // ====================================
 
             const frontendUrl =
                 process.env.FRONTEND_URL ||
                 "http://localhost:5173";
 
 
-            // ----------------------------------------
+            // ====================================
             // QUERY PARAMETERS
-            // ----------------------------------------
+            // ====================================
 
             const params =
                 new URLSearchParams({
@@ -1307,13 +1088,9 @@ const googleLoginSuccess =
                 });
 
 
-            // ----------------------------------------
-            // REDIRECT THROUGH ROOT "/"
-            //
-            // Important for Vercel:
-            // root URL exists directly, so React
-            // handles the Google auth result.
-            // ----------------------------------------
+            // ====================================
+            // ROOT REDIRECT FOR VERCEL
+            // ====================================
 
             return res.redirect(
                 `${frontendUrl}/?${params.toString()}`
