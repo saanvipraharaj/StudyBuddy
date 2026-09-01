@@ -1,10 +1,20 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+    useState
+} from "react";
+
+import {
+    Link,
+    useNavigate
+} from "react-router-dom";
+
 import api from "../services/api";
 
 
 function Login() {
-    const navigate = useNavigate();
+
+    const navigate =
+        useNavigate();
+
 
     const [email, setEmail] =
         useState("");
@@ -33,6 +43,7 @@ function Login() {
     // ============================================
 
     const handleLogin = async (event) => {
+
         event.preventDefault();
 
         setMessage("");
@@ -43,6 +54,7 @@ function Login() {
             !email.trim() ||
             !password
         ) {
+
             setMessage(
                 "Please enter your email and password."
             );
@@ -56,6 +68,7 @@ function Login() {
 
 
         try {
+
             setLoading(true);
 
 
@@ -81,6 +94,7 @@ function Login() {
 
 
             if (!token) {
+
                 throw new Error(
                     "Authentication token was not returned."
                 );
@@ -88,17 +102,23 @@ function Login() {
 
 
             if (rememberMe) {
+
                 localStorage.setItem(
                     "token",
                     token
                 );
 
+
                 if (user) {
+
                     localStorage.setItem(
                         "user",
-                        JSON.stringify(user)
+                        JSON.stringify(
+                            user
+                        )
                     );
                 }
+
 
                 sessionStorage.removeItem(
                     "token"
@@ -108,18 +128,25 @@ function Login() {
                     "user"
                 );
 
+
             } else {
+
                 sessionStorage.setItem(
                     "token",
                     token
                 );
 
+
                 if (user) {
+
                     sessionStorage.setItem(
                         "user",
-                        JSON.stringify(user)
+                        JSON.stringify(
+                            user
+                        )
                     );
                 }
+
 
                 localStorage.removeItem(
                     "token"
@@ -141,20 +168,17 @@ function Login() {
             );
 
 
-            /*
-                If your backend returns
-                setup_completed, this will send
-                unfinished users to setup.
-            */
-
             if (
                 user &&
                 user.setup_completed === false
             ) {
+
                 navigate(
                     "/setup"
                 );
+
             } else {
+
                 navigate(
                     "/dashboard"
                 );
@@ -162,6 +186,7 @@ function Login() {
 
 
         } catch (error) {
+
             console.error(
                 "Login error:",
                 error
@@ -180,6 +205,7 @@ function Login() {
 
 
         } finally {
+
             setLoading(false);
         }
     };
@@ -190,8 +216,14 @@ function Login() {
     // ============================================
 
     const handleGoogleLogin = () => {
+
+        const apiUrl =
+            import.meta.env.VITE_API_URL ||
+            "http://localhost:5000";
+
+
         window.location.href =
-            "http://localhost:5000/api/auth/google";
+            `${apiUrl}/api/auth/google`;
     };
 
 
@@ -200,6 +232,7 @@ function Login() {
     // ============================================
 
     return (
+
         <main className="auth-page exact-login-page">
 
             <section className="exact-login-card">
@@ -226,9 +259,11 @@ function Login() {
                         StudyBuddy <span>AI</span>
                     </h1>
 
+
                     <h2>
                         Welcome back
                     </h2>
+
 
                     <p>
                         Continue your personalized
@@ -243,6 +278,7 @@ function Login() {
                 {/* ================================= */}
 
                 {message && (
+
                     <div
                         className={
                             messageType ===
@@ -271,6 +307,7 @@ function Login() {
                     <span className="exact-login-google-icon">
                         G
                     </span>
+
 
                     <span>
                         Continue with Google
@@ -313,12 +350,15 @@ function Login() {
                     <div className="exact-login-field">
 
                         <label>
+
                             <span className="exact-login-field-icon">
                                 ✉
                             </span>
 
                             Email
+
                         </label>
+
 
                         <input
                             type="email"
@@ -342,12 +382,15 @@ function Login() {
                     <div className="exact-login-field">
 
                         <label>
+
                             <span className="exact-login-field-icon">
                                 ♙
                             </span>
 
                             Password
+
                         </label>
+
 
                         <div className="exact-login-password-wrap">
 
@@ -378,9 +421,11 @@ function Login() {
                                     )
                                 }
                             >
+
                                 {showPassword
                                     ? "Hide"
                                     : "Show"}
+
                             </button>
 
                         </div>
@@ -405,6 +450,7 @@ function Login() {
                                     )
                                 }
                             />
+
 
                             <span>
                                 Remember me
@@ -432,9 +478,11 @@ function Login() {
                             loading
                         }
                     >
+
                         {loading
                             ? "Logging in..."
                             : "Log In"}
+
                     </button>
 
                 </form>
