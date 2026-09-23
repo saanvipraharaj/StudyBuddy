@@ -20,10 +20,8 @@ const formatLocalDate = (date) => {
         return null;
     }
 
-
     const year =
         date.getFullYear();
-
 
     const month =
         String(
@@ -33,7 +31,6 @@ const formatLocalDate = (date) => {
             "0"
         );
 
-
     const day =
         String(
             date.getDate()
@@ -41,7 +38,6 @@ const formatLocalDate = (date) => {
             2,
             "0"
         );
-
 
     return `${year}-${month}-${day}`;
 };
@@ -59,11 +55,6 @@ const normalizeDateOnly = (
         return null;
     }
 
-
-    // ========================================
-    // DATE OBJECT
-    // ========================================
-
     if (
         value instanceof Date
     ) {
@@ -73,22 +64,15 @@ const normalizeDateOnly = (
         );
     }
 
-
-    // ========================================
-    // STRING
-    // ========================================
-
     const stringValue =
         String(
             value
         ).trim();
 
-
     const directMatch =
         stringValue.match(
             /^(\d{4})-(\d{2})-(\d{2})/
         );
-
 
     if (directMatch) {
 
@@ -99,16 +83,10 @@ const normalizeDateOnly = (
         );
     }
 
-
-    // ========================================
-    // FALLBACK
-    // ========================================
-
     const parsed =
         new Date(
             stringValue
         );
-
 
     if (
         Number.isNaN(
@@ -118,7 +96,6 @@ const normalizeDateOnly = (
 
         return null;
     }
-
 
     return formatLocalDate(
         parsed
@@ -138,21 +115,17 @@ const parseDateOnly = (
         return null;
     }
 
-
     const normalized =
         normalizeDateOnly(
             dateString
         );
 
-
     if (!normalized) {
         return null;
     }
 
-
     const parts =
         normalized.split("-");
-
 
     if (
         parts.length !== 3
@@ -160,24 +133,20 @@ const parseDateOnly = (
         return null;
     }
 
-
     const year =
         Number(
             parts[0]
         );
-
 
     const month =
         Number(
             parts[1]
         );
 
-
     const day =
         Number(
             parts[2]
         );
-
 
     if (
         !Number.isInteger(year) ||
@@ -188,14 +157,12 @@ const parseDateOnly = (
         return null;
     }
 
-
     const date =
         new Date(
             year,
             month - 1,
             day
         );
-
 
     if (
         date.getFullYear() !== year ||
@@ -207,14 +174,12 @@ const parseDateOnly = (
         return null;
     }
 
-
     date.setHours(
         0,
         0,
         0,
         0
     );
-
 
     return date;
 };
@@ -229,14 +194,12 @@ const getToday = () => {
     const today =
         new Date();
 
-
     today.setHours(
         0,
         0,
         0,
         0
     );
-
 
     return today;
 };
@@ -338,7 +301,8 @@ const autoRescheduleMissedTasksForPlan =
         await pool.query(
             `UPDATE study_plan_tasks
 
-             SET status = 'missed'
+             SET
+                status = 'missed'
 
              WHERE
                 study_plan_id = $1
@@ -354,8 +318,7 @@ const autoRescheduleMissedTasksForPlan =
                 )
 
              AND
-                task_date <
-                CURRENT_DATE`,
+                task_date < CURRENT_DATE`,
             [
                 planId
             ]
@@ -495,35 +458,32 @@ const autoRescheduleMissedTasksForPlan =
 
 
         examsResult.rows.forEach(
-            (exam) => {
+            (
+                exam
+            ) => {
 
                 const subjectId =
                     Number(
                         exam.subject_id
                     );
 
-
                 const examDate =
                     normalizeDateOnly(
                         exam.exam_date
                     );
 
-
                 if (!examDate) {
                     return;
                 }
-
 
                 const existingDate =
                     subjectExamMap.get(
                         subjectId
                     );
 
-
                 if (
                     !existingDate ||
-                    examDate <
-                        existingDate
+                    examDate < existingDate
                 ) {
 
                     subjectExamMap.set(
@@ -585,18 +545,18 @@ const autoRescheduleMissedTasksForPlan =
 
 
         futureLoadResult.rows.forEach(
-            (row) => {
+            (
+                row
+            ) => {
 
                 const date =
                     normalizeDateOnly(
                         row.task_date
                     );
 
-
                 if (!date) {
                     return;
                 }
-
 
                 loadMap.set(
                     date,
@@ -677,7 +637,6 @@ const autoRescheduleMissedTasksForPlan =
                         "No exam date found for this subject."
                 });
 
-
                 continue;
             }
 
@@ -705,17 +664,26 @@ const autoRescheduleMissedTasksForPlan =
                         "The exam date could not be read."
                 });
 
-
                 continue;
             }
 
 
             // ========================================
-            // BUILD AVAILABLE STUDY DATES
+            // TASK DURATION
             // ========================================
 
-            const availableDates =
-                [];
+            const taskMinutes =
+                Number(
+                    task.duration_minutes
+                ) || 30;
+
+
+            // ========================================
+            // FIND EARLIEST AVAILABLE DATE
+            // ========================================
+
+            let selectedDate =
+                null;
 
 
             const cursor =
@@ -737,9 +705,23 @@ const autoRescheduleMissedTasksForPlan =
 
                 if (dateString) {
 
-                    availableDates.push(
-                        dateString
-                    );
+                    const currentLoad =
+                        loadMap.get(
+                            dateString
+                        ) || 0;
+
+
+                    if (
+                        currentLoad +
+                        taskMinutes <=
+                        dailyLimit
+                    ) {
+
+                        selectedDate =
+                            dateString;
+
+                        break;
+                    }
                 }
 
 
@@ -750,13 +732,10 @@ const autoRescheduleMissedTasksForPlan =
 
 
             // ========================================
-            // NO TIME BEFORE EXAM
+            // NO CAPACITY AVAILABLE
             // ========================================
 
-            if (
-                availableDates.length ===
-                0
-            ) {
+            if (!selectedDate) {
 
                 unableToReschedule.push({
 
@@ -770,87 +749,10 @@ const autoRescheduleMissedTasksForPlan =
                         task.subject_name,
 
                     reason:
-                        "There are no remaining study days before this subject's exam."
+                        "No available study time remains before this subject's exam."
                 });
 
-
                 continue;
-            }
-
-
-            const taskMinutes =
-                Number(
-                    task.duration_minutes
-                ) || 30;
-
-
-            let selectedDate =
-                null;
-
-
-            // ========================================
-            // FIRST AVAILABLE DAY
-            // ========================================
-
-            for (
-                const date
-                of availableDates
-            ) {
-
-                const currentLoad =
-                    loadMap.get(
-                        date
-                    ) || 0;
-
-
-                if (
-                    currentLoad +
-                    taskMinutes <=
-                    dailyLimit
-                ) {
-
-                    selectedDate =
-                        date;
-
-                    break;
-                }
-            }
-
-
-            // ========================================
-            // ALL FUTURE DAYS FULL
-            // ========================================
-
-            if (!selectedDate) {
-
-                selectedDate =
-                    availableDates.reduce(
-                        (
-                            bestDate,
-                            currentDate
-                        ) => {
-
-                            const bestLoad =
-                                loadMap.get(
-                                    bestDate
-                                ) || 0;
-
-
-                            const currentLoad =
-                                loadMap.get(
-                                    currentDate
-                                ) || 0;
-
-
-                            return (
-                                currentLoad <
-                                bestLoad
-                            )
-                                ? currentDate
-                                : bestDate;
-                        },
-                        availableDates[0]
-                    );
             }
 
 
@@ -888,8 +790,13 @@ const autoRescheduleMissedTasksForPlan =
                         id = $2
 
                      AND
-                        study_plan_id =
-                        $3
+                        study_plan_id = $3
+
+                     AND
+                        completed = FALSE
+
+                     AND
+                        status = 'missed'
 
                      RETURNING *`,
                     [
@@ -938,7 +845,15 @@ const autoRescheduleMissedTasksForPlan =
                     task.topic_name,
 
                 subject_name:
-                    task.subject_name
+                    task.subject_name,
+
+                previous_task_date:
+                    normalizeDateOnly(
+                        task.task_date
+                    ),
+
+                new_task_date:
+                    selectedDate
             });
         }
 
@@ -952,26 +867,37 @@ const autoRescheduleMissedTasksForPlan =
 
 
         if (
-            updatedTasks.length === 1
+            updatedTasks.length > 0 &&
+            unableToReschedule.length === 0
         ) {
 
-            message =
-                "You missed 1 study task. Your remaining timetable has been adjusted automatically.";
+            if (
+                updatedTasks.length === 1
+            ) {
+
+                message =
+                    "You missed 1 study task. It has been automatically moved to the earliest available study day.";
+
+            } else {
+
+                message =
+                    `You missed ${updatedTasks.length} study tasks. They have been automatically moved to available study days.`;
+            }
 
         } else if (
-            updatedTasks.length > 1
+            updatedTasks.length > 0 &&
+            unableToReschedule.length > 0
         ) {
 
             message =
-                `You missed ${updatedTasks.length} study tasks. Your remaining timetable has been adjusted automatically.`;
+                `${updatedTasks.length} missed task(s) were rescheduled, but ${unableToReschedule.length} could not be moved because there was not enough study time before the exam.`;
 
         } else if (
-            unableToReschedule.length >
-            0
+            unableToReschedule.length > 0
         ) {
 
             message =
-                "You have missed study tasks, but some could not be moved because their exam is too close.";
+                "Some missed tasks could not be rescheduled because there was not enough study time before the exam.";
         }
 
 
@@ -2098,7 +2024,6 @@ const generateStudyPlan = async (
                         return exam.exam_date;
                     }
 
-
                     return latest;
                 },
                 null
@@ -2366,9 +2291,7 @@ const generateStudyPlan = async (
                 "ROLLBACK"
             );
 
-
             throw databaseError;
-
 
         } finally {
 
