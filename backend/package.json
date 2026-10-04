@@ -27,9 +27,9 @@
     "openai": "^7.5.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "pdf-parse": "^2.4.5",
     "pg": "^8.23.0",
-    "resend": "^6.20.0"
+    "resend": "^6.20.0",
+    "unpdf": "^1.8.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

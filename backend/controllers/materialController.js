@@ -1,66 +1,63 @@
 const pool = require("../config/db");
 
 // ============================================
-// LOAD PDF PARSER ONLY WHEN REQUIRED
+// PDF TEXT EXTRACTION
 // ============================================
 
 const extractPdfText = async (buffer) => {
-    let parser = null;
-
     try {
-        // Lazy import prevents pdf-parse from loading
-        // during Vercel server startup.
+        // Dynamic import works with CommonJS
+        // and avoids loading the PDF library
+        // during server startup.
         const {
-            PDFParse
-        } = require("pdf-parse");
+            getDocumentProxy,
+            extractText
+        } = await import("unpdf");
 
-        parser = new PDFParse({
-            data: buffer
+        // Convert Node.js Buffer to Uint8Array
+        const pdf = await getDocumentProxy(
+            new Uint8Array(buffer)
+        );
+
+        // Extract text from all PDF pages
+        const result = await extractText(pdf, {
+            mergePages: true
         });
 
-        const result =
-            await parser.getText();
+        const text = String(
+            result?.text || ""
+        ).trim();
 
-        return (
-            result?.text?.trim() ||
-            ""
+        console.log(
+            "PDF text extraction successful:",
+            text.length,
+            "characters"
         );
+
+        return text;
 
     } catch (error) {
         console.error(
             "PDF extraction error:",
-            error
+            error.stack || error
         );
 
         return "";
-
-    } finally {
-        if (parser) {
-            try {
-                await parser.destroy();
-            } catch (error) {
-                console.error(
-                    "PDF parser cleanup error:",
-                    error
-                );
-            }
-        }
     }
 };
+
 
 // ============================================
 // UPLOAD MATERIAL
 // ============================================
 
-const uploadMaterial = async (
-    req,
-    res
-) => {
+const uploadMaterial = async (req, res) => {
     try {
         const {
             chapter_id,
             title
         } = req.body;
+
 
         // ========================================
         // VALIDATION
@@ -71,8 +68,7 @@ const uploadMaterial = async (
                 .status(400)
                 .json({
                     status: "error",
-                    message:
-                        "Chapter is required"
+                    message: "Chapter is required"
                 });
         }
 
@@ -81,37 +77,34 @@ const uploadMaterial = async (
                 .status(400)
                 .json({
                     status: "error",
-                    message:
-                        "PDF file is required"
+                    message: "PDF file is required"
                 });
         }
+
 
         // ========================================
         // VERIFY CHAPTER OWNERSHIP
         // ========================================
 
-        const chapterCheck =
-            await pool.query(
-                `
-                SELECT
-                    chapters.id,
-                    chapters.subject_id
-                FROM chapters
-                INNER JOIN subjects
-                    ON chapters.subject_id =
-                       subjects.id
-                WHERE chapters.id = $1
-                AND subjects.user_id = $2
-                `,
-                [
-                    chapter_id,
-                    req.user.userId
-                ]
-            );
+        const chapterCheck = await pool.query(
+            `
+            SELECT
+                chapters.id,
+                chapters.subject_id
+            FROM chapters
+            INNER JOIN subjects
+                ON chapters.subject_id = subjects.id
+            WHERE chapters.id = $1
+            AND subjects.user_id = $2
+            `,
+            [
+                chapter_id,
+                req.user.userId
+            ]
+        );
 
         if (
-            chapterCheck.rows.length ===
-            0
+            chapterCheck.rows.length === 0
         ) {
             return res
                 .status(403)
@@ -122,10 +115,10 @@ const uploadMaterial = async (
                 });
         }
 
+
         const subjectId =
-            chapterCheck
-                .rows[0]
-                .subject_id;
+            chapterCheck.rows[0].subject_id;
+
 
         // ========================================
         // FILE INFORMATION
@@ -134,15 +127,13 @@ const uploadMaterial = async (
         const fileName =
             req.file.originalname;
 
-        const fileType =
-            "pdf";
+        const fileType = "pdf";
 
         /*
-            We are intentionally not storing
-            a local Vercel filesystem path.
+            We intentionally do not store a local
+            Vercel filesystem path.
 
-            Vercel filesystem storage is
-            temporary.
+            Vercel filesystem storage is temporary.
 
             The extracted PDF text is stored
             permanently inside PostgreSQL.
@@ -157,6 +148,7 @@ const uploadMaterial = async (
                 ""
             );
 
+
         // ========================================
         // EXTRACT PDF TEXT
         // ========================================
@@ -170,81 +162,79 @@ const uploadMaterial = async (
                 );
         }
 
+
         console.log(
             "PDF processed:",
             {
-                file:
-                    fileName,
-
-                characters:
-                    extractedText.length
+                file: fileName,
+                characters: extractedText.length
             }
         );
+
 
         // ========================================
         // SAVE MATERIAL
         // ========================================
 
-        const result =
-            await pool.query(
-                `
-                INSERT INTO study_materials
-                (
-                    user_id,
-                    subject_id,
-                    chapter_id,
-                    topic_id,
-                    title,
-                    file_name,
-                    file_type,
-                    file_url,
-                    extracted_text,
-                    ai_summary
-                )
-                VALUES
-                (
-                    $1,
-                    $2,
-                    $3,
-                    NULL,
-                    $4,
-                    $5,
-                    $6,
-                    $7,
-                    $8,
-                    NULL
-                )
-                RETURNING
-                    id,
-                    user_id,
-                    subject_id,
-                    chapter_id,
-                    topic_id,
-                    title,
-                    file_name,
-                    file_type,
-                    file_url,
-                    extracted_text,
-                    ai_summary,
-                    uploaded_at
-                `,
-                [
-                    req.user.userId,
-                    subjectId,
-                    chapter_id,
-                    materialTitle,
-                    fileName,
-                    fileType,
-                    fileUrl,
-                    extractedText
-                ]
-            );
+        const result = await pool.query(
+            `
+            INSERT INTO study_materials
+            (
+                user_id,
+                subject_id,
+                chapter_id,
+                topic_id,
+                title,
+                file_name,
+                file_type,
+                file_url,
+                extracted_text,
+                ai_summary
+            )
+            VALUES
+            (
+                $1,
+                $2,
+                $3,
+                NULL,
+                $4,
+                $5,
+                $6,
+                $7,
+                $8,
+                NULL
+            )
+            RETURNING
+                id,
+                user_id,
+                subject_id,
+                chapter_id,
+                topic_id,
+                title,
+                file_name,
+                file_type,
+                file_url,
+                extracted_text,
+                ai_summary,
+                uploaded_at
+            `,
+            [
+                req.user.userId,
+                subjectId,
+                chapter_id,
+                materialTitle,
+                fileName,
+                fileType,
+                fileUrl,
+                extractedText
+            ]
+        );
+
 
         return res
             .status(201)
             .json({
-                status:
-                    "success",
+                status: "success",
 
                 message:
                     extractedText.length > 0
@@ -255,37 +245,38 @@ const uploadMaterial = async (
                     result.rows[0]
             });
 
+
     } catch (error) {
+
         console.error(
             "Upload material error:",
-            error
+            error.stack || error
         );
 
         return res
             .status(500)
             .json({
-                status:
-                    "error",
-
+                status: "error",
                 message:
                     "Unable to upload study material"
             });
     }
 };
 
+
 // ============================================
 // GET MATERIALS BY CHAPTER
 // ============================================
 
 const getMaterialsByChapter =
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
+
         try {
+
             const {
                 chapterId
             } = req.params;
+
 
             const chapterCheck =
                 await pool.query(
@@ -305,21 +296,20 @@ const getMaterialsByChapter =
                     ]
                 );
 
+
             if (
-                chapterCheck
-                    .rows
-                    .length === 0
+                chapterCheck.rows.length === 0
             ) {
+
                 return res
                     .status(403)
                     .json({
-                        status:
-                            "error",
-
+                        status: "error",
                         message:
                             "You do not have access to this chapter"
                     });
             }
+
 
             const result =
                 await pool.query(
@@ -348,22 +338,22 @@ const getMaterialsByChapter =
                     ]
                 );
 
+
             return res
                 .status(200)
                 .json({
-                    status:
-                        "success",
+                    status: "success",
 
                     count:
-                        result
-                            .rows
-                            .length,
+                        result.rows.length,
 
                     materials:
                         result.rows
                 });
 
+
         } catch (error) {
+
             console.error(
                 "Get chapter materials error:",
                 error
@@ -372,28 +362,27 @@ const getMaterialsByChapter =
             return res
                 .status(500)
                 .json({
-                    status:
-                        "error",
-
+                    status: "error",
                     message:
                         "Unable to fetch study materials"
                 });
         }
     };
 
+
 // ============================================
 // GET COMBINED CHAPTER TEXT
 // ============================================
 
 const getCombinedChapterText =
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
+
         try {
+
             const {
                 chapterId
             } = req.params;
+
 
             const chapterCheck =
                 await pool.query(
@@ -415,24 +404,24 @@ const getCombinedChapterText =
                     ]
                 );
 
+
             if (
-                chapterCheck
-                    .rows
-                    .length === 0
+                chapterCheck.rows.length === 0
             ) {
+
                 return res
                     .status(404)
                     .json({
-                        status:
-                            "error",
-
+                        status: "error",
                         message:
                             "Chapter not found or you do not have access to it"
                     });
             }
 
+
             const chapter =
                 chapterCheck.rows[0];
+
 
             const materialsResult =
                 await pool.query(
@@ -448,9 +437,7 @@ const getCombinedChapterText =
                     AND user_id = $2
                     AND extracted_text IS NOT NULL
                     AND LENGTH(
-                        TRIM(
-                            extracted_text
-                        )
+                        TRIM(extracted_text)
                     ) > 0
                     ORDER BY uploaded_at ASC
                     `,
@@ -460,17 +447,17 @@ const getCombinedChapterText =
                     ]
                 );
 
+
             const materials =
                 materialsResult.rows;
 
-            if (
-                materials.length === 0
-            ) {
+
+            if (materials.length === 0) {
+
                 return res
                     .status(200)
                     .json({
-                        status:
-                            "success",
+                        status: "success",
 
                         chapter: {
                             id:
@@ -483,22 +470,19 @@ const getCombinedChapterText =
                                 chapter.subject_id
                         },
 
-                        material_count:
-                            0,
+                        material_count: 0,
 
-                        materials:
-                            [],
+                        materials: [],
 
-                        total_characters:
-                            0,
+                        total_characters: 0,
 
-                        combined_text:
-                            "",
+                        combined_text: "",
 
                         message:
                             "No extracted study material found for this chapter"
                     });
             }
+
 
             const combinedText =
                 materials
@@ -507,6 +491,7 @@ const getCombinedChapterText =
                             material,
                             index
                         ) => {
+
                             return `
 ========================================
 MATERIAL ${index + 1}
@@ -518,15 +503,12 @@ ${material.extracted_text.trim()}
 `;
                         }
                     )
-                    .join(
-                        "\n\n"
-                    );
+                    .join("\n\n");
+
 
             const materialInfo =
                 materials.map(
-                    (
-                        material
-                    ) => ({
+                    (material) => ({
                         id:
                             material.id,
 
@@ -543,11 +525,11 @@ ${material.extracted_text.trim()}
                     })
                 );
 
+
             return res
                 .status(200)
                 .json({
-                    status:
-                        "success",
+                    status: "success",
 
                     chapter: {
                         id:
@@ -573,7 +555,9 @@ ${material.extracted_text.trim()}
                         combinedText
                 });
 
+
         } catch (error) {
+
             console.error(
                 "Combine chapter text error:",
                 error
@@ -582,28 +566,27 @@ ${material.extracted_text.trim()}
             return res
                 .status(500)
                 .json({
-                    status:
-                        "error",
-
+                    status: "error",
                     message:
                         "Unable to combine chapter study materials"
                 });
         }
     };
 
+
 // ============================================
 // GET SINGLE MATERIAL
 // ============================================
 
 const getMaterialById =
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
+
         try {
+
             const {
                 id
             } = req.params;
+
 
             const result =
                 await pool.query(
@@ -631,33 +614,33 @@ const getMaterialById =
                     ]
                 );
 
+
             if (
-                result
-                    .rows
-                    .length === 0
+                result.rows.length === 0
             ) {
+
                 return res
                     .status(404)
                     .json({
-                        status:
-                            "error",
-
+                        status: "error",
                         message:
                             "Study material not found"
                     });
             }
 
+
             return res
                 .status(200)
                 .json({
-                    status:
-                        "success",
+                    status: "success",
 
                     material:
                         result.rows[0]
                 });
 
+
         } catch (error) {
+
             console.error(
                 "Get material error:",
                 error
@@ -666,28 +649,27 @@ const getMaterialById =
             return res
                 .status(500)
                 .json({
-                    status:
-                        "error",
-
+                    status: "error",
                     message:
                         "Unable to fetch study material"
                 });
         }
     };
 
+
 // ============================================
 // DELETE MATERIAL
 // ============================================
 
 const deleteMaterial =
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
+
         try {
+
             const {
                 id
             } = req.params;
+
 
             const result =
                 await pool.query(
@@ -703,33 +685,32 @@ const deleteMaterial =
                     ]
                 );
 
+
             if (
-                result
-                    .rows
-                    .length === 0
+                result.rows.length === 0
             ) {
+
                 return res
                     .status(404)
                     .json({
-                        status:
-                            "error",
-
+                        status: "error",
                         message:
                             "Study material not found"
                     });
             }
 
+
             return res
                 .status(200)
                 .json({
-                    status:
-                        "success",
-
+                    status: "success",
                     message:
                         "Study material deleted successfully"
                 });
 
+
         } catch (error) {
+
             console.error(
                 "Delete material error:",
                 error
@@ -738,14 +719,13 @@ const deleteMaterial =
             return res
                 .status(500)
                 .json({
-                    status:
-                        "error",
-
+                    status: "error",
                     message:
                         "Unable to delete study material"
                 });
         }
     };
+
 
 // ============================================
 // EXPORTS
